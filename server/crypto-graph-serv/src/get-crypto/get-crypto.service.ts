@@ -1,52 +1,84 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { ICurrencyCalculation, IGeckoResponce } from '../common/interfaces';
+import { BadGatewayException, Injectable } from '@nestjs/common';
+import {
+  ICurrencyCalculation,
+  IGeckoResponce,
+  IParseData,
+} from '../common/interfaces';
 import { parsData } from '../common/helpers/parsData';
-import { priceAverager } from '../common/helpers/priceAverager';
-import { toDateNowUnix } from '../common/helpers/dateTransformers/toDateNowUnix';
-import { toWeekDiapason } from '../common/helpers/dateTransformers/toWeekDiapason';
-import {log} from "util";
+import { weekAverager } from '../common/helpers/weekAverager';
+import * as https from 'https';
 
 const CoinGecko = require('coingecko-api');
+
+type CoinGeckoRequestOptionsBuilder = {
+  _buildRequestOptions(path: string, params?: object): https.RequestOptions;
+};
 
 @Injectable()
 export class GetCryptoService {
   geckoApiReq;
   constructor() {
     this.geckoApiReq = new CoinGecko();
+    const client = this.geckoApiReq as CoinGeckoRequestOptionsBuilder;
+    const buildRequestOptions = client._buildRequestOptions.bind(this.geckoApiReq);
+    client._buildRequestOptions = (path, params) => ({
+      ...buildRequestOptions(path, params),
+      headers: {
+        'User-Agent': 'crypto-graph/1.0',
+      },
+    });
   }
   async getCoinsList(): Promise<IGeckoResponce> {
     try {
-      return await this.geckoApiReq.coins.all();
+      const response = await this.geckoApiReq.coins.markets({
+        vs_currency: 'usd',
+        order: 'market_cap_desc',
+        per_page: 15,
+        page: 1,
+        sparkline: true,
+      });
+      if (!response.success || !Array.isArray(response.data)) {
+        throw new BadGatewayException(
+          `CoinGecko market data request failed with status ${response.code}`,
+        );
+      }
+      return response;
     } catch (err) {
-      throw new BadRequestException( err, 'Request to GeckoCoin is failed :(, please try again!' )
+      if (err instanceof BadGatewayException) throw err;
+      throw new BadGatewayException('CoinGecko market data request failed');
     }
   }
 
-  async getCryptoData(cryptoListData: []): Promise<ICurrencyCalculation> {
+  async getCryptoData(
+    cryptoListData: IParseData[],
+  ): Promise<ICurrencyCalculation[]> {
     try {
       const clearData = parsData(cryptoListData);
-      const params = {
-        vs_currency: 'usd',
-        from: toWeekDiapason(),
-        to: toDateNowUnix(),
-      };
-
-      const frog = await Promise.all(
-        clearData.map(async ({ id }, idx) => {
-          try {
-            if (idx <= 7) return {coin: id, ...await this.geckoApiReq.coins.fetchMarketChartRange(id, params)}
-            console.log('after the first promises');
-            if (idx > 7 && idx <= 14) return {coin: id, ...await this.geckoApiReq.coins.fetchMarketChartRange(id, params)}
-            console.log('after the second promises');
-          } catch (err) {
-            console.log({ err });
-            return err;
-          }
-        }),
-      );
-      return priceAverager(frog);
+      return clearData.map(({ id, sparkline_in_7d }) => {
+        const prices = sparkline_in_7d?.price;
+        if (!Array.isArray(prices) || prices.length === 0) {
+          throw new BadGatewayException(
+            `CoinGecko returned no 7-day price data for ${id}`,
+          );
+        }
+        return {
+          coin: id,
+          success: true,
+          message: 'OK',
+          code: 200,
+          data: {
+            price_average: weekAverager(
+              prices.map(
+                (price, index): [number, number] => [index, price],
+              ),
+            ),
+            market_cap_average: [],
+          },
+        };
+      });
     } catch (err) {
-      throw new BadRequestException( err, 'Api not response :(');
+      if (err instanceof BadGatewayException) throw err;
+      throw new BadGatewayException('CoinGecko price data could not be processed');
     }
   }
 }

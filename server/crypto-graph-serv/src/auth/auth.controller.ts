@@ -54,10 +54,8 @@ export class AuthController {
     @Body() body: RegisterDto,
     @Res() response: Response,
   ): Promise<Response> {
-    const { receivedUser, accessToken } = await this.authService.register(body);
-    const refreshToken = this.authService.getCookieWithJwtRefreshToken(
-      receivedUser._id,
-    );
+    const { receivedUser, accessToken, refreshToken } =
+      await this.authService.register(body);
     //@
     // It's almost security variant.
     // response.cookie('Set-Cookie', refreshTokenCookie, { domain: '.crypto-graph.com', path: '/auth/' });
@@ -86,10 +84,7 @@ export class AuthController {
     @Res() response: Response,
   ): Promise<Response> {
     const { LoggedUser, tokenRefresh } = await this.authService.login(user);
-    const accessToken = this.authService.getJwtAccessToken(
-      LoggedUser._id,
-      LoggedUser.password,
-    );
+    const accessToken = this.authService.getJwtAccessToken(LoggedUser._id);
     if (!user) {
       throw new BadRequestException(['Register Error']);
     }
@@ -113,7 +108,6 @@ export class AuthController {
       );
       const accessToken = this.authService.getJwtAccessToken(
         userForRefresh._id,
-        userForRefresh.password,
       );
       const refreshToken = this.authService.getCookieWithJwtRefreshToken(
         userForRefresh._id,

@@ -1,4 +1,4 @@
-import {makeAutoObservable, toJS} from "mobx";
+import {makeAutoObservable} from "mobx";
 import {DELETE, GET, POST} from "../requests/request";
 import {DELETE_FAVORITE, GET_FAVORITES, SET_FAVORITE} from "../../serverRouting/switch";
 import {getLocalStorage} from "../../helpers/helpersFoo";
@@ -13,36 +13,42 @@ class UserRequestStore {
     async setFavoriteCrypto(payloadSetFavorite) {
         try {
             const jwtForFavorites = getLocalStorage('rememberMe')
-            const {data} = await POST( SET_FAVORITE, payloadSetFavorite, jwtForFavorites)
+            const response = await POST( SET_FAVORITE, payloadSetFavorite, jwtForFavorites)
+            if (!Array.isArray(response?.data)) return false
+            const {data} = response
             this.userFavoriteStore = data
-            toJS(this.userFavoriteStore)
-            // console.log("response Set the favorite", data)
+            return true
         } catch (err) {
             console.log(err)
+            return false
         }
     }
 
     async deleteFavoriteCrypto(payloadDeleteFavorite) {
         try {
             const jwtForFavorites = getLocalStorage('rememberMe')
-            const {data} = await DELETE( DELETE_FAVORITE, payloadDeleteFavorite,  jwtForFavorites)
+            const response = await DELETE( DELETE_FAVORITE, payloadDeleteFavorite, jwtForFavorites)
+            if (!Array.isArray(response?.data)) return false
+            const {data} = response
             this.userFavoriteStore = data
-            toJS(this.userFavoriteStore)
-            // console.log("response delete the favorite", data)
+            return true
         } catch (err) {
             console.log(err)
+            return false
         }
     }
 
     async getFavoritesList() {
         try {
             const jwtForFavorites = getLocalStorage('rememberMe')
-            const {data} = await GET( GET_FAVORITES, jwtForFavorites)
+            const response = await GET( GET_FAVORITES, jwtForFavorites)
+            if (!Array.isArray(response?.data?.watchlist)) return false
+            const {data} = response
             this.userFavoriteStore = data.watchlist
-            toJS(this.userFavoriteStore)
             return data
         } catch (err) {
             console.log(err)
+            return false
         }
     }
 }

@@ -14,22 +14,11 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     super();
   }
 
-  async validate( userReq: IUser ): Promise<boolean>{
+  async validate(userReq: IUser): Promise<boolean> {
     const { email, password } = userReq;
     const user = await this.userService.findByEmail(email);
-    if (user) {
-      const isMatchPass = await this.authService.isMatchPassword(
-        password,
-        user.password,
-      );
-      if (isMatchPass) {
-        const { password, ...result } = user;
-        return true;
-      }
-      return true;
-    }
-    if (!user) {
-      throw new UnauthorizedException();
+    if (!user || !(await this.authService.isMatchPassword(password, user.password))) {
+      throw new UnauthorizedException('Invalid email or password');
     }
     return true;
   }

@@ -4,10 +4,11 @@ import {observer} from "mobx-react-lite";
 
 
 export const Glassbtn = observer(
-    ({text, padding, background, fontSize, handleClick, buttonType }) => {
+    ({text, padding, background, fontSize, handleClick, buttonType, disabled }) => {
         return (
             <GlassButton
                 type={buttonType}
+                disabled={disabled}
                 paddingOption={padding}
                 backgroundOption={background}
                 fontSize={fontSize}

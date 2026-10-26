@@ -72,7 +72,6 @@ export class AuthService {
         const token = this.getCookieWithJwtRefreshToken(gotUser._id);
         const accessToken = this.getJwtAccessToken(
           gotUser._id,
-          gotUser.password,
         );
         const entityRefreshToken: JwtRefreshToken = {
           user: gotUser._id,
@@ -82,7 +81,7 @@ export class AuthService {
         };
         await this.checkUserByRefreshTokenAndUpdate(entityRefreshToken);
 
-        return { receivedUser: gotUser, accessToken };
+        return { receivedUser: gotUser, accessToken, refreshToken: token };
       }
     } catch (e) {
       throw new UnauthorizedException([e.message]);
@@ -104,18 +103,18 @@ export class AuthService {
       // let {profile} = await this.oktaClient.getUser(userId)
 
       const user = await this.userService.findByEmail(email);
+      if (!user) throw new UnauthorizedException('Invalid email or password');
       const isMatch = await this.isMatchPassword(password, user.password);
-      if (isMatch) {
-        const tokenRefresh = this.getCookieWithJwtRefreshToken(user._id);
-        const entityRefreshToken: JwtRefreshToken = {
-          user: user._id,
-          email: user.email,
-          role: user.role,
-          refreshToken: tokenRefresh,
-        };
-        await this.checkUserByRefreshTokenAndUpdate(entityRefreshToken);
-        return { LoggedUser: user, tokenRefresh };
-      }
+      if (!isMatch) throw new UnauthorizedException('Invalid email or password');
+      const tokenRefresh = this.getCookieWithJwtRefreshToken(user._id);
+      const entityRefreshToken: JwtRefreshToken = {
+        user: user._id,
+        email: user.email,
+        role: user.role,
+        refreshToken: tokenRefresh,
+      };
+      await this.checkUserByRefreshTokenAndUpdate(entityRefreshToken);
+      return { LoggedUser: user, tokenRefresh };
     } catch (err) {
       throw new UnauthorizedException([err.message]);
     }
@@ -140,8 +139,8 @@ export class AuthService {
     return await bcrypt.compare(pass, hash);
   }
 
-  public getJwtAccessToken(userId: Types.ObjectId, password: string) {
-    const payload = { userId, password };
+  public getJwtAccessToken(userId: Types.ObjectId) {
+    const payload = { userId };
     return this.jwtService.sign(payload, {
       secret: this.configService.get('JWT_SECRET'),
       expiresIn: `${this.configService.get('JWT_EXPIRESIN')}s`,
@@ -167,9 +166,19 @@ export class AuthService {
 
   async checkUserByRefreshTokenAndUpdate(jwtRefreshTokenDB: JwtRefreshToken) {
     try {
-      const searshTokenRefresh = await this.jwtModel.findOneAndUpdate({ user: jwtRefreshTokenDB.user }, jwtRefreshTokenDB);
-      if (searshTokenRefresh === null)
-        await this.createRefreshJwt(jwtRefreshTokenDB);
+      const refreshTokenHash = await bcrypt.hash(
+        jwtRefreshTokenDB.refreshToken,
+        10,
+      );
+      const session = {
+        ...jwtRefreshTokenDB,
+        refreshToken: refreshTokenHash,
+      };
+      const existingSession = await this.jwtModel.findOneAndUpdate(
+        { user: jwtRefreshTokenDB.user },
+        session,
+      );
+      if (existingSession === null) await this.createRefreshJwt(session);
     } catch (err) {
       throw new NotFoundException(err);
     }
@@ -191,19 +200,16 @@ export class AuthService {
     }
   }
 
-  async getUserIfRefreshTokenMatches(refreshToken: string, userId: string) {
+  async getUserIfRefreshTokenMatches(
+    refreshToken: string,
+    userId: string,
+  ): Promise<boolean> {
     try {
       const refreshTokenOld = await this.jwtModel.findOne({ user: Types.ObjectId(userId) });
-      console.log('refreshTokenOld', { refreshTokenOld });
-      const isRefreshTokenMatching = await bcrypt.compare(
-        refreshToken,
-        refreshTokenOld.refreshToken,
-      );
-      if (isRefreshTokenMatching) {
-        return userId;
-      }
-    } catch (e) {
-      throw new NotFoundException(e);
+      if (!refreshTokenOld) return false;
+      return bcrypt.compare(refreshToken, refreshTokenOld.refreshToken);
+    } catch (err) {
+      throw new NotFoundException(err);
     }
   }
 

@@ -1,30 +1,17 @@
 import {Card} from "../../common/Card/Card";
 import {MyResponsiveBump} from "../../Charts/ChartNivoBamp/Bamp";
 import {Surface} from "../../common/Surfaces/OrderingSurface/OrderingSurface";
-import React, {useEffect, useState} from "react";
+import React from "react";
+import {observer} from "mobx-react-lite";
 import UserRequestStore from "../../../store/userRequest/userReques.store"
 import CryptoStore from "../../../store/cryptocurrency/crypto.store"
 import {WrapperLoader} from "../../common/wrapperLoader/WrapperLoader";
 
-export const FavoriteTab = ({tabType}) => {
+export const FavoriteTab = observer(({tabType}) => {
 
     const crypto_store = CryptoStore.cryptoStore
     const arr = UserRequestStore.userFavoriteStore
-    const [favoriteList, setFavoriteList] = useState([])
-
-    useEffect(() => {
-        ( async () => {
-            try {
-               const filtratedFavorite = crypto_store.filter(({id, data}) => {
-                    if (arr?.includes(id)) return {id, data}
-                    return false;
-                } )
-                setFavoriteList(filtratedFavorite)
-            } catch (err) {
-                console.log(err)
-            }
-        })()
-    }, [tabType])
+    const favoriteList = crypto_store.filter(({id}) => arr.includes(id))
 
     return (
         <Surface
@@ -50,4 +37,4 @@ export const FavoriteTab = ({tabType}) => {
         </Surface>
     )
 
-}
+})

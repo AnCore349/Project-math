@@ -10,6 +10,7 @@ export interface ISession {
 export interface IRegistrationResponse {
   receivedUser: User;
   accessToken: string;
+  refreshToken: string;
 }
 
 export interface IUserList {
@@ -31,7 +32,6 @@ export interface IJwtRefreshToken {
 //Jwt interface for strategy and etc.
 export interface IJwtUser {
   userId: string;
-  password: string;
 }
 //Jwt payload interface
 export interface IJwtPayload extends IJwtUser {
@@ -105,11 +105,10 @@ export interface IParseData {
     small: string;
     large: string;
   };
-  current_price: {
-    [key: string]: string;
-  };
-  market_cap: {
-    [key: string]: string;
+  current_price: number;
+  market_cap: number;
+  sparkline_in_7d: {
+    price: number[];
   };
 }
 
@@ -120,12 +119,12 @@ export interface IWeek {
 
 export interface ICurrencyCalculation {
   coin: string;
-  success: string;
+  success: boolean;
   message: string;
   code: number;
   data: {
-    price_average: IWeek;
-    market_cap_average: IWeek;
+    price_average: IWeek[];
+    market_cap_average: IWeek[];
   };
 }
 

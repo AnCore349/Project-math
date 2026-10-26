@@ -17,5 +17,9 @@ export const GlassButton = styled.button`
   cursor: pointer;
   transition: .8s;
   :${colors.fireHover}
-`;
 
+  :disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+`;

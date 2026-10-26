@@ -1,8 +1,20 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
+import CryptoStore from '../../store/cryptocurrency/crypto.store';
+import JwtCheckingStore from '../../store/jwtChecking/jwtChecking.store';
 
-test('renders learn react link', () => {
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+test('renders the Crypto-G landing page', () => {
+  jest.spyOn(CryptoStore, 'pingMaker').mockResolvedValue();
+  JwtCheckingStore.isInitialized = true;
+  JwtCheckingStore.isRestoring = false;
+  JwtCheckingStore.error = '';
+  jest.spyOn(JwtCheckingStore, 'restoreSession').mockResolvedValue();
+
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+
+  expect(screen.getByText('Crypto-G')).toBeInTheDocument();
 });

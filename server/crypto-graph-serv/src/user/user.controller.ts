@@ -15,7 +15,7 @@ import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ValidationErrorObject } from '../common/objects/ValidationErrorObject';
 import { UserService } from './services/user.service';
 import { IRequestWithUser } from '../common/interfaces';
-import { favoritesDto } from './dto/user.dto';
+import { FavoritesDto } from './dto/user.dto';
 import { ValidationUserResponse } from '../common/objects/userResponse';
 
 @Controller('user')
@@ -59,9 +59,8 @@ export class UserController {
   async setFavorite(
     @Res() response: Response,
     @Req() request: IRequestWithUser,
-    @Body() body: favoritesDto,
+    @Body() body: FavoritesDto,
   ): Promise<Response> {
-    console.log('00000000000', body);
     const favorites = await this.userService.setFavorite(request.user.id, body.cryptoName);
     return response.status(HttpStatus.OK).json(favorites);
   }
@@ -82,7 +81,7 @@ export class UserController {
   async deleteFavorite(
     @Res() response: Response,
     @Req() request: IRequestWithUser,
-    @Body() body: favoritesDto,
+    @Body() body: FavoritesDto,
   ): Promise<Response> {
     const favorites = await this.userService.deleteFavoriteCrypto(request.user.id, body.cryptoName);
     return response.status(HttpStatus.OK).json(favorites);
