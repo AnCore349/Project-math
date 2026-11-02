@@ -5,6 +5,7 @@ services:
       context: ./client/crypto-g
       dockerfile: docker/cli/Dockerfile
     restart: unless-stopped
+    mem_limit: 64m
     ports:
       - "4000:80"
     networks:
@@ -17,10 +18,12 @@ services:
       context: ./server/crypto-graph-serv
       dockerfile: docker/serv/Dockerfile
     restart: unless-stopped
+    mem_limit: 384m
     ports:
       - "4100:7100"
     environment:
       PORT: 7100
+      NODE_OPTIONS: --max-old-space-size=256
       DB_HOST: "mongodb://${DB_USER:-crypto_graph}:${DB_PASS:-crypto_graph_local}@mongodb:27017/${DB_NAME:-crypto_graph}?authSource=admin"
       DB_NAME: ${DB_NAME:-crypto_graph}
       DB_USER: ${DB_USER:-crypto_graph}
@@ -50,6 +53,8 @@ services:
   mongodb:
     image: mongo:5.0
     restart: unless-stopped
+    command: ["--wiredTigerCacheSizeGB", "0.25"]
+    mem_limit: 512m
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${DB_USER:-crypto_graph}
       MONGO_INITDB_ROOT_PASSWORD: ${DB_PASS:-crypto_graph_local}
