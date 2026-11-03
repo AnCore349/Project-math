@@ -29,9 +29,11 @@ export class User {
   @Prop()
   currentHashedRefreshToken?: string;
 
-  //TODO
-  // @Prop()
-  // isActive: boolean
+  @Prop()
+  passwordResetTokenHash?: string;
+
+  @Prop()
+  passwordResetExpiresAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

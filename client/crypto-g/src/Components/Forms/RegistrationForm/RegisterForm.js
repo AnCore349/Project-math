@@ -2,7 +2,7 @@ import React, {useState} from "react";
 import {observer} from "mobx-react-lite";
 import {NeonInput} from "../../common/Inputs/NeonInput/NeonInput";
 import {LinkBoxReg} from "./registerForm.style";
-import {Form, LineBox, AuthMessage} from "../commonStylesForm/common.styles"
+import {Form, LineBox, AuthMessage, ButtonBox} from "../commonStylesForm/common.styles"
 import {Glassbtn} from "../../common/Buttons/Glassbutton/Glassbutton";
 import {colors} from "../../../styles-common/common.style";
 import AuthStore from "../../../store/authentication/auth.store";
@@ -39,6 +39,15 @@ export const RegisterForm = observer(({handleLinkToLogin}) => {
             <NeonInput onFormHandle={handleFormEmailRegister} typeInput="email" labelText={'Email'} placeholderText={'Enter your email'} required/>
             <NeonInput onFormHandle={handleFormPasswordRegister} typeInput="password" labelText={'Password'} placeholderText={'Enter your password'} required/>
             {AuthStore.error && <AuthMessage role="alert">{AuthStore.error}</AuthMessage>}
+            <ButtonBox>
+                <Glassbtn
+                    buttonType="button"
+                    text={'Continue with Google'}
+                    fontSize={'1'}
+                    handleClick={() => AuthStore.startGoogleLogin(true)}
+                    disabled={AuthStore.isSubmitting}
+                />
+            </ButtonBox>
             <LineBox>
                 {/*<Checkbox clue={"LogIn and Remember Me."} checkboxText={'Auto LogIn'}/>*/}
                 <LinkBoxReg>

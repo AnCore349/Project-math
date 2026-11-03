@@ -6,6 +6,7 @@ import {structureMenu} from "../../Components/Header/structureMenu";
 import {observer} from "mobx-react-lite";
 import UserRequestStore from "../../store/userRequest/userReques.store";
 import GlobalStore from "../../store/GlobalStore/global.store";
+import CryptoStore from "../../store/cryptocurrency/crypto.store";
 
 export const UserPage = observer(
     () => {
@@ -19,7 +20,10 @@ export const UserPage = observer(
         useEffect(() => {
             ( async () => {
                 try {
-                    await UserRequestStore.getFavoritesList()
+                    await Promise.all([
+                        UserRequestStore.getFavoritesList(),
+                        CryptoStore.cryptoStore.length ? Promise.resolve() : CryptoStore.pingMaker(),
+                    ])
                 } catch (err) {
                     console.log(err)
                 }

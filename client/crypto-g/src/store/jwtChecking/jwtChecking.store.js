@@ -2,7 +2,12 @@ import {makeAutoObservable} from "mobx";
 import {GET, POST} from "../requests/request";
 import {ACCESS_ROUTE, REFRESH_TOKEN_ROUT} from "../../serverRouting/switch";
 import GlobalStore from "../GlobalStore/global.store"
-import {getLocalStorage, setLocalStorage} from "../../helpers/helpersFoo";
+import {
+    getAuthRememberChoice,
+    getAuthSession,
+    isRememberedSession,
+    setAuthSession,
+} from "../../helpers/helpersFoo";
 
 class JwtCheckingStore {
     isInitialized = false
@@ -31,13 +36,14 @@ class JwtCheckingStore {
         this.error = ''
 
         try {
-            const storedSession = getLocalStorage('rememberMe')
+            const storedSession = getAuthSession()
+            const rememberMe = storedSession ? isRememberedSession() : getAuthRememberChoice()
             const jwt = storedSession?.jwt
 
             if (jwt) {
                 try {
                     const authenticatedUser = await this.getAuthenticatedUser(jwt)
-                    setLocalStorage(authenticatedUser, 'rememberMe')
+                    setAuthSession(authenticatedUser, rememberMe)
                     await GlobalStore.addResponseToGlobalStore(authenticatedUser)
                     return
                 } catch (err) {
@@ -47,11 +53,12 @@ class JwtCheckingStore {
 
             const {data} = await GET(REFRESH_TOKEN_ROUT)
             const authenticatedUser = await this.getAuthenticatedUser(data.jwt)
-            setLocalStorage(authenticatedUser, 'rememberMe')
+            setAuthSession(authenticatedUser, rememberMe)
             await GlobalStore.addResponseToGlobalStore(authenticatedUser)
         } catch (err) {
             if (err?.response?.status === 401) {
                 localStorage.removeItem('rememberMe')
+                sessionStorage.removeItem('rememberMe')
                 GlobalStore.clearGlobalStore()
             } else {
                 this.error = this.getErrorMessage(err)
@@ -64,10 +71,10 @@ class JwtCheckingStore {
 
     async addResponseToJwtCheckingStore() {
         try {
-            const storedSession = getLocalStorage('rememberMe')
+            const storedSession = getAuthSession()
             if (!storedSession?.jwt) return
             const authenticatedUser = await this.getAuthenticatedUser(storedSession.jwt)
-            setLocalStorage(authenticatedUser, 'rememberMe')
+            setAuthSession(authenticatedUser, isRememberedSession())
             await GlobalStore.addResponseToGlobalStore(authenticatedUser)
         } catch (err) {
             console.log(err)

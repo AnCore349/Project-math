@@ -9,6 +9,8 @@ import {
   Req,
   Get,
   Put,
+  Query,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -16,7 +18,12 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { LoginDto, RegisterDto } from './dto/auth.dto';
+import {
+  ForgotPasswordDto,
+  LoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+} from './dto/auth.dto';
 import { ValidationErrorObject } from '../common/objects/ValidationErrorObject';
 import { AuthService } from './services/auth/auth.service';
 import { Response } from 'express';
@@ -27,6 +34,9 @@ import { IRequestUser, IRequestWithUser } from '../common/interfaces';
 import JwtRefreshGuard from './guards/jwt-refresh.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtAccessDto } from './dto/jwtAccess.dto';
+import { Request } from 'express';
+import { GoogleOAuthGuard } from './guards/google-oauth.guard';
+import { randomBytes } from 'crypto';
 
 @ApiBearerAuth()
 @ApiTags('auth')
@@ -62,7 +72,8 @@ export class AuthController {
     //@
     return response
       .status(HttpStatus.OK)
-      .cookie('tokenRefresh', refreshToken, { httpOnly: true })
+      .cookie('tokenRefresh', refreshToken, this.refreshCookieOptions(true))
+      .cookie('authRememberMe', '1', this.refreshCookieOptions(true))
       .json({ jwt: accessToken, email: receivedUser.email });
   }
 
@@ -94,7 +105,12 @@ export class AuthController {
     //@
     return response
       .status(HttpStatus.OK)
-      .cookie('tokenRefresh', tokenRefresh, { httpOnly: true })
+      .cookie('tokenRefresh', tokenRefresh, this.refreshCookieOptions(user.rememberMe))
+      .cookie(
+        'authRememberMe',
+        user.rememberMe ? '1' : '0',
+        this.refreshCookieOptions(user.rememberMe),
+      )
       .json({ jwt: accessToken, nickName: LoggedUser.nickname });
   }
 
@@ -120,13 +136,87 @@ export class AuthController {
       // It's almost security variant.
       // response.cookie('Set-Cookie', refreshToken, {httpOnly: true});
       //@
+      const rememberMe = request.cookies?.authRememberMe === '1';
       return response
         .status(HttpStatus.OK)
-        .cookie('tokenRefresh', refreshToken, { httpOnly: true })
+        .cookie('tokenRefresh', refreshToken, this.refreshCookieOptions(rememberMe))
+        .cookie(
+          'authRememberMe',
+          rememberMe ? '1' : '0',
+          this.refreshCookieOptions(rememberMe),
+        )
         .json({ jwt: accessToken });
     } catch (err) {
       throw new BadRequestException(err);
     }
+  }
+
+  @Get('google')
+  startGoogleLogin(
+    @Query('rememberMe') rememberMe: string,
+    @Res() response: Response,
+  ) {
+    if (!this.authService.isGoogleOAuthConfigured()) {
+      throw new ServiceUnavailableException(
+        'Google sign-in is not configured on the server.',
+      );
+    }
+
+    const shouldRemember = rememberMe === '1';
+    const state = randomBytes(32).toString('hex');
+    response.cookie(
+      'authRememberMe',
+      shouldRemember ? '1' : '0',
+      this.refreshCookieOptions(shouldRemember),
+    );
+    response.cookie('oauthState', state, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 5 * 60 * 1000,
+    });
+    return response.redirect(
+      `/auth/google/redirect?state=${encodeURIComponent(state)}`,
+    );
+  }
+
+  @Get('google/redirect')
+  @UseGuards(GoogleOAuthGuard)
+  redirectToGoogle() {}
+
+  @Get('google/callback')
+  @UseGuards(GoogleOAuthGuard)
+  async googleCallback(
+    @Req() request: Request & { user: { email: string; nickname: string } },
+    @Res() response: Response,
+  ) {
+    const { tokenRefresh } = await this.authService.loginWithGoogle(
+      request.user,
+    );
+    const rememberMe = request.cookies?.authRememberMe === '1';
+    response
+      .cookie('tokenRefresh', tokenRefresh, this.refreshCookieOptions(rememberMe))
+      .cookie(
+        'authRememberMe',
+        rememberMe ? '1' : '0',
+        this.refreshCookieOptions(rememberMe),
+      );
+    return response.redirect(`${this.authService.getFrontendUrl()}/`);
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() body: ForgotPasswordDto) {
+    await this.authService.requestPasswordReset(body.email);
+    return {
+      message:
+        'If an account exists for that email, a password reset link has been sent.',
+    };
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: ResetPasswordDto) {
+    await this.authService.resetPassword(body.token, body.password);
+    return { message: 'Your password has been reset. You can now log in.' };
   }
 
   @Post('jwtAccess')
@@ -171,7 +261,26 @@ export class AuthController {
     return response
       .status(HttpStatus.OK)
       .clearCookie('tokenRefresh')
+      .clearCookie('authRememberMe')
       .json({ resDel });
+  }
+
+  private refreshCookieOptions(rememberMe?: boolean) {
+    const options: {
+      httpOnly: boolean;
+      sameSite: 'lax';
+      secure: boolean;
+      maxAge?: number;
+    } = {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    };
+    if (rememberMe) {
+      options.maxAge =
+        Number(process.env.JWT_REFRESH_EXPIRESIN || 604800) * 1000;
+    }
+    return options;
   }
   //Endpoint off *******************************************
   // @UseGuards(JwtAuthGuard)

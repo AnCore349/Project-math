@@ -1,7 +1,12 @@
 import JwtCheckingStore from './jwtChecking.store';
 import {GET, POST} from '../requests/request';
 import GlobalStore from '../GlobalStore/global.store';
-import {getLocalStorage, setLocalStorage} from '../../helpers/helpersFoo';
+import {
+    getAuthRememberChoice,
+    getAuthSession,
+    isRememberedSession,
+    setAuthSession,
+} from '../../helpers/helpersFoo';
 
 jest.mock('../requests/request', () => ({
     GET: jest.fn(),
@@ -17,8 +22,10 @@ jest.mock('../GlobalStore/global.store', () => ({
 }));
 
 jest.mock('../../helpers/helpersFoo', () => ({
-    getLocalStorage: jest.fn(),
-    setLocalStorage: jest.fn(),
+    getAuthRememberChoice: jest.fn(),
+    getAuthSession: jest.fn(),
+    isRememberedSession: jest.fn(),
+    setAuthSession: jest.fn(),
 }));
 
 describe('JwtCheckingStore session restore', () => {
@@ -31,7 +38,8 @@ describe('JwtCheckingStore session restore', () => {
 
     it('restores a user with a valid stored access token', async () => {
         const session = {nickName: 'CryptoUser', jwt: 'access-token'};
-        getLocalStorage.mockReturnValue({jwt: 'access-token'});
+        getAuthSession.mockReturnValue({jwt: 'access-token'});
+        isRememberedSession.mockReturnValue(true);
         POST.mockResolvedValue({data: session});
 
         await JwtCheckingStore.restoreSession();
@@ -42,14 +50,15 @@ describe('JwtCheckingStore session restore', () => {
             {jwt: 'access-token'},
         );
         expect(GET).not.toHaveBeenCalled();
-        expect(setLocalStorage).toHaveBeenCalledWith(session, 'rememberMe');
+        expect(setAuthSession).toHaveBeenCalledWith(session, true);
         expect(GlobalStore.addResponseToGlobalStore).toHaveBeenCalledWith(session);
         expect(JwtCheckingStore.isInitialized).toBe(true);
     });
 
     it('refreshes an expired access token using the refresh cookie', async () => {
         const session = {nickName: 'CryptoUser', jwt: 'fresh-access-token'};
-        getLocalStorage.mockReturnValue({jwt: 'expired-access-token'});
+        getAuthSession.mockReturnValue({jwt: 'expired-access-token'});
+        isRememberedSession.mockReturnValue(true);
         POST.mockRejectedValueOnce({response: {status: 401}})
             .mockResolvedValueOnce({data: session});
         GET.mockResolvedValue({data: {jwt: 'fresh-access-token'}});
@@ -62,12 +71,13 @@ describe('JwtCheckingStore session restore', () => {
             {jwt: 'fresh-access-token'},
             {jwt: 'fresh-access-token'},
         );
-        expect(setLocalStorage).toHaveBeenCalledWith(session, 'rememberMe');
+        expect(setAuthSession).toHaveBeenCalledWith(session, true);
         expect(GlobalStore.addResponseToGlobalStore).toHaveBeenCalledWith(session);
     });
 
     it('clears a session when the refresh cookie is rejected', async () => {
-        getLocalStorage.mockReturnValue(null);
+        getAuthSession.mockReturnValue(null);
+        getAuthRememberChoice.mockReturnValue(true);
         GET.mockRejectedValue({response: {status: 401}});
         const removeItem = jest.spyOn(Storage.prototype, 'removeItem');
 
@@ -80,7 +90,8 @@ describe('JwtCheckingStore session restore', () => {
     });
 
     it('shows a retryable error instead of silently dropping the session on network failure', async () => {
-        getLocalStorage.mockReturnValue({jwt: 'access-token'});
+        getAuthSession.mockReturnValue({jwt: 'access-token'});
+        isRememberedSession.mockReturnValue(false);
         POST.mockRejectedValue(new Error('Network unavailable'));
 
         await JwtCheckingStore.restoreSession();

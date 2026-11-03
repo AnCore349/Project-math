@@ -2,7 +2,7 @@ import AuthStore from './auth.store';
 import {POST, PUT} from '../requests/request';
 import GlobalStore from '../GlobalStore/global.store';
 import ModalStore from '../modalWindow/modal.store';
-import {getLocalStorage, setLocalStorage} from '../../helpers/helpersFoo';
+import {clearAuthSession, getAuthSession, setAuthSession} from '../../helpers/helpersFoo';
 
 jest.mock('../requests/request', () => ({
     POST: jest.fn(),
@@ -25,8 +25,9 @@ jest.mock('../modalWindow/modal.store', () => ({
 }));
 
 jest.mock('../../helpers/helpersFoo', () => ({
-    getLocalStorage: jest.fn(),
-    setLocalStorage: jest.fn(),
+    clearAuthSession: jest.fn(),
+    getAuthSession: jest.fn(),
+    setAuthSession: jest.fn(),
 }));
 
 describe('AuthStore', () => {
@@ -34,6 +35,7 @@ describe('AuthStore', () => {
         jest.clearAllMocks();
         AuthStore.error = '';
         AuthStore.isSubmitting = false;
+        AuthStore.resetMessage = '';
     });
 
     afterEach(() => {
@@ -46,12 +48,12 @@ describe('AuthStore', () => {
         });
 
         await expect(
-            AuthStore.handleAddCredoLogin({email: 'user@example.com', password: 'wrong'}),
+            AuthStore.handleAddCredoLogin({email: 'user@example.com', password: 'wrong'}, false),
         ).resolves.toBe(false);
 
         expect(AuthStore.error).toBe('Invalid email or password');
         expect(ModalStore.closeModal).not.toHaveBeenCalled();
-        expect(setLocalStorage).not.toHaveBeenCalled();
+        expect(setAuthSession).not.toHaveBeenCalled();
         expect(AuthStore.isSubmitting).toBe(false);
     });
 
@@ -60,10 +62,15 @@ describe('AuthStore', () => {
         POST.mockResolvedValue({data: authResponse});
 
         await expect(
-            AuthStore.handleAddCredoLogin({email: 'user@example.com', password: 'secret'}),
+            AuthStore.handleAddCredoLogin({email: 'user@example.com', password: 'secret'}, true),
         ).resolves.toBe(true);
 
-        expect(setLocalStorage).toHaveBeenCalledWith(authResponse, 'rememberMe');
+        expect(POST).toHaveBeenCalledWith('auth/login', {
+            email: 'user@example.com',
+            password: 'secret',
+            rememberMe: true,
+        });
+        expect(setAuthSession).toHaveBeenCalledWith(authResponse, true);
         expect(GlobalStore.addResponseToGlobalStore).toHaveBeenCalledWith(authResponse);
         expect(ModalStore.closeModal).toHaveBeenCalledTimes(1);
         expect(AuthStore.error).toBe('');
@@ -81,20 +88,27 @@ describe('AuthStore', () => {
             }),
         ).resolves.toBe(true);
 
-        expect(setLocalStorage).toHaveBeenCalledWith(authenticatedUser, 'rememberMe');
+        expect(setAuthSession).toHaveBeenCalledWith(authenticatedUser, true);
         expect(GlobalStore.addResponseToGlobalStore).toHaveBeenCalledWith(authenticatedUser);
         expect(ModalStore.closeModal).toHaveBeenCalledTimes(1);
     });
 
     it('retains auth state when logout fails', async () => {
-        getLocalStorage.mockReturnValue({jwt: 'access-token'});
+        getAuthSession.mockReturnValue({jwt: 'access-token'});
         PUT.mockRejectedValue(new Error('Network unavailable'));
-        jest.spyOn(console, 'log').mockImplementation(() => {});
-        const clear = jest.spyOn(Storage.prototype, 'clear');
 
         await expect(AuthStore.handleLogOutUser()).resolves.toBe(false);
 
-        expect(clear).not.toHaveBeenCalled();
+        expect(clearAuthSession).not.toHaveBeenCalled();
         expect(GlobalStore.clearGlobalStore).not.toHaveBeenCalled();
+    });
+
+    it('sends password reset requests and displays the generic success message', async () => {
+        POST.mockResolvedValue({data: {message: 'If an account exists, an email has been sent.'}});
+
+        await expect(AuthStore.requestPasswordReset('user@example.com')).resolves.toBe(true);
+
+        expect(POST).toHaveBeenCalledWith('auth/forgot-password', {email: 'user@example.com'});
+        expect(AuthStore.resetMessage).toBe('If an account exists, an email has been sent.');
     });
 });

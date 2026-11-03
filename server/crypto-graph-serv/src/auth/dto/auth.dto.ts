@@ -1,4 +1,12 @@
-import { IsEmail, IsMongoId, IsNotEmpty } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsMongoId,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../../common/types';
 import { Types } from 'mongoose';
@@ -11,6 +19,29 @@ export class LoginDto {
 
   @ApiProperty()
   @IsNotEmpty()
+  password: string;
+
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  rememberMe?: boolean;
+}
+
+export class ForgotPasswordDto {
+  @ApiProperty()
+  @IsEmail()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+
+  @ApiProperty({ minLength: 8 })
+  @IsString()
+  @MinLength(8)
   password: string;
 }
 
