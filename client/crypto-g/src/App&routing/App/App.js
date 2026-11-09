@@ -9,6 +9,7 @@ import {MainPage} from "../../pages/mainPage/mainPage";
 import {UserPage} from "../../pages/userPage/userPage";
 import JwtCheckingStore from "../../store/jwtChecking/jwtChecking.store";
 import {Loader} from "../../Components/common/Loader/Loader";
+import {ResetPassword} from "../../pages/resetPassword/ResetPassword";
 
 const App = observer( () => {
     useEffect(() => {
@@ -34,6 +35,7 @@ const App = observer( () => {
       <Router>
           <MainComponent>
               <Switch>
+                  <Route exact path="/reset-password" component={ResetPassword} />
                   <Route exact path="/user"  >
                       {!isAuthed ? <Redirect to="/" /> : <UserPage /> }
                   </Route>

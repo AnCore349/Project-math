@@ -16,7 +16,9 @@ watchlists.
 1. Install Docker Desktop with the Compose plugin.
 2. Copy `.env.example` to `.env` and replace the development-only JWT secrets
    and database password if needed. Keep the database password URL-safe because
-   it is embedded in the MongoDB connection URI.
+   it is embedded in the MongoDB connection URI. Google login requires a Google
+   OAuth web client; password reset requires an SMTP account. See the optional
+   variables in `.env.example`.
 3. From the repository root, run `docker compose up --build`.
 4. Open the client at <http://localhost:4000>. The API is available at
    <http://localhost:4100>, with Swagger documentation at
@@ -63,13 +65,34 @@ The application also requires access to the CoinGecko API. `.env.example`
 contains local development placeholders; do not commit `.env` or real
 credentials.
 
+## Google login and password reset
+
+For Google login, create an OAuth 2.0 Web application in Google Cloud Console
+and add the value of `GOOGLE_CALLBACK_URL` (by default
+`http://localhost:4100/auth/google/callback`) as an authorized redirect URI.
+Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`. The Google button
+signs in existing accounts or creates an account on first sign-in using Google's
+verified email.
+
+For password reset, configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`,
+`SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM`. Reset links are valid for 30
+minutes. Set `FRONTEND_URL` to the public frontend origin when deploying away
+from localhost. Without SMTP configuration, reset requests return an explicit
+service-unavailable error rather than claiming an email was sent.
+
+The login form's “Remember Me” checkbox controls persistence: checked sessions
+use browser-persistent storage and refresh cookies; unchecked sessions use
+session storage and browser-session cookies.
+
 ## Verification notes
 
 The NestJS server and React client compile. The focused server market-data tests
 and client landing-page test pass. Server authentication tests cover password
 validation, access-token identity lookup, refresh-token verification, and
-hashed refresh-token storage; client tests cover login and registration session
-handling and API error feedback. The market-data API requests the top 15
+hashed refresh-token storage. Account-recovery tests cover Google account
+creation, reset-token email flow, invalid tokens, password hashing, and session
+revocation. Client tests cover login/registration, remember-me storage,
+and the empty favorites state. The market-data API requests the top 15
 CoinGecko markets and their 7-day price sparklines in one request; historical
 market-cap averages are not returned because this CoinGecko endpoint provides
 only the current market cap. The client currently charts prices only.

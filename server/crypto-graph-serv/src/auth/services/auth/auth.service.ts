@@ -23,6 +23,8 @@ import {
 } from '../../schemas/jwt-session-schema';
 import { CreateUserDto } from '../../dto/auth.dto';
 import { User, UserDocument } from '../../schemas/user-schema';
+import { createHash, randomBytes } from 'crypto';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class AuthService {
@@ -36,7 +38,8 @@ export class AuthService {
   ) {}
 
   async register(registerData: RegisterDto): Promise<IRegistrationResponse> {
-    const { nickname, email, password } = registerData;
+    const { nickname, password } = registerData;
+    const email = registerData.email.trim().toLowerCase();
     const saltOrRounds = 10;
     const hash = await bcrypt.hash(password, saltOrRounds);
 
@@ -102,22 +105,136 @@ export class AuthService {
       // } = await this.oktaClient.createSession({sessionToken});
       // let {profile} = await this.oktaClient.getUser(userId)
 
-      const user = await this.userService.findByEmail(email);
+      const user = await this.userService.findByEmail(email.trim().toLowerCase());
       if (!user) throw new UnauthorizedException('Invalid email or password');
       const isMatch = await this.isMatchPassword(password, user.password);
       if (!isMatch) throw new UnauthorizedException('Invalid email or password');
-      const tokenRefresh = this.getCookieWithJwtRefreshToken(user._id);
-      const entityRefreshToken: JwtRefreshToken = {
-        user: user._id,
-        email: user.email,
-        role: user.role,
-        refreshToken: tokenRefresh,
-      };
-      await this.checkUserByRefreshTokenAndUpdate(entityRefreshToken);
-      return { LoggedUser: user, tokenRefresh };
+      return await this.createLoginSession(user);
     } catch (err) {
       throw new UnauthorizedException([err.message]);
     }
+  }
+
+  async loginWithGoogle(profile: {
+    email: string;
+    nickname: string;
+  }): Promise<ILogin> {
+    let user = await this.userService.findByEmail(profile.email);
+    if (!user) {
+      user = await this.create({
+        _id: Types.ObjectId(),
+        email: profile.email,
+        nickname: profile.nickname,
+        password: await bcrypt.hash(randomBytes(32).toString('hex'), 10),
+        watchlist: [],
+        role: 'user',
+      });
+    }
+    return this.createLoginSession(user);
+  }
+
+  private async createLoginSession(user: User): Promise<ILogin> {
+    const tokenRefresh = this.getCookieWithJwtRefreshToken(user._id);
+    await this.checkUserByRefreshTokenAndUpdate({
+      user: user._id,
+      email: user.email,
+      role: user.role,
+      refreshToken: tokenRefresh,
+    });
+    return { LoggedUser: user, tokenRefresh };
+  }
+
+  isGoogleOAuthConfigured(): boolean {
+    return Boolean(
+      this.configService.get('server.googleClientId') &&
+        this.configService.get('server.googleClientSecret'),
+    );
+  }
+
+  getFrontendUrl(): string {
+    return this.configService.get('server.frontendUrl');
+  }
+
+  async requestPasswordReset(email: string): Promise<void> {
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpPort = Number(process.env.SMTP_PORT || 587);
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPassword = process.env.SMTP_PASSWORD;
+      const from = process.env.SMTP_FROM || smtpUser;
+      if (!smtpHost || !smtpUser || !smtpPassword || !from) {
+        throw new ServiceUnavailableException(
+          'Password reset email is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM.',
+        );
+      }
+
+      const user = await this.userService.findByEmail(email.toLowerCase());
+      if (!user) return;
+
+      const token = randomBytes(32).toString('hex');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+      await this.userModel.findByIdAndUpdate(user._id, {
+        passwordResetTokenHash: tokenHash,
+        passwordResetExpiresAt: expiresAt,
+      });
+
+      const resetUrl = new URL(
+        '/reset-password',
+        process.env.FRONTEND_URL ||
+          this.configService.get('server.frontendUrl') ||
+          'http://localhost:4000',
+      );
+      resetUrl.searchParams.set('token', token);
+
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: { user: smtpUser, pass: smtpPassword },
+        });
+        await transporter.sendMail({
+          from,
+          to: user.email,
+          subject: 'Reset your Crypto-Graph password',
+          text: `Use this link within 30 minutes to reset your password: ${resetUrl.toString()}`,
+          html: `<p>Use this link within 30 minutes to reset your password:</p><p><a href="${resetUrl.toString()}">Reset password</a></p>`,
+        });
+      } catch (error) {
+        await this.userModel.findByIdAndUpdate(user._id, {
+          $unset: {
+            passwordResetTokenHash: 1,
+            passwordResetExpiresAt: 1,
+          },
+        });
+        throw new ServiceUnavailableException(
+          'The password reset email could not be sent. Please try again later.',
+        );
+      }
+  }
+
+  async resetPassword(token: string, password: string): Promise<void> {
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const user = await this.userModel.findOneAndUpdate(
+        {
+          passwordResetTokenHash: tokenHash,
+          passwordResetExpiresAt: { $gt: new Date() },
+        },
+        {
+          password: await bcrypt.hash(password, 10),
+          $unset: {
+            passwordResetTokenHash: 1,
+            passwordResetExpiresAt: 1,
+          },
+        },
+        { new: true },
+      );
+      if (!user) {
+        throw new UnauthorizedException(
+          'This password reset link is invalid or has expired.',
+        );
+      }
+      await this.deleteRefreshToken(user._id.toString());
   }
 
   //TODO OAuth 2.0 wit google
@@ -215,7 +332,6 @@ export class AuthService {
 
   async setCurrentRefreshToken(refreshToken: string, userId: Types.ObjectId) {
     try {
-      console.log('userId', { userId });
       const currentHashedRefreshToken = await bcrypt.hash(refreshToken, 10);
       await this.jwtModel.findOneAndUpdate(
         { user: userId },

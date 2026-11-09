@@ -32,6 +32,16 @@ services:
       JWT_EXPIRESIN: ${JWT_EXPIRESIN:-3600}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-development-refresh-secret}
       JWT_REFRESH_EXPIRESIN: ${JWT_REFRESH_EXPIRESIN:-604800}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:4100/auth/google/callback}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     networks:
       - app-network
     depends_on:

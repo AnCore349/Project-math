@@ -11,6 +11,7 @@ import { JwtRefreshTokenStrategy } from './strategies/jwt-refresh.strategy';
 import { MongooseModule } from '@nestjs/mongoose';
 import { JwtRefreshToken, JwtSchema } from './schemas/jwt-session-schema';
 import { User, UserSchema } from './schemas/user-schema';
+import { GoogleStrategy } from './strategies/google.strategy';
 
 @Global()
 @Module({
@@ -33,7 +34,13 @@ import { User, UserSchema } from './schemas/user-schema';
     PassportModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, JwtStrategy, JwtRefreshTokenStrategy],
+  providers: [
+    AuthService,
+    LocalStrategy,
+    JwtStrategy,
+    JwtRefreshTokenStrategy,
+    GoogleStrategy,
+  ],
   exports: [AuthService],
 })
 export class AuthModule {}

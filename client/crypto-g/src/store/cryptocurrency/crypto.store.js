@@ -1,7 +1,7 @@
 import {makeAutoObservable, toJS} from "mobx";
 import {GET} from "../requests/request";
 import {GET_CRYPTO} from "../../serverRouting/switch";
-import {getLocalStorage} from "../../helpers/helpersFoo";
+import {getAuthSession} from "../../helpers/helpersFoo";
 import JwtCheckingStore from "../jwtChecking/jwtChecking.store"
 
 class CryptoStore {
@@ -12,7 +12,7 @@ class CryptoStore {
 
     async getCryptoList() {
         try {
-            const jwtForFavorites = getLocalStorage('rememberMe')
+            const jwtForFavorites = getAuthSession()
             const {data} = await GET( GET_CRYPTO, jwtForFavorites)
             this.cryptoStore = data?.map(({coin, data}) => ({ id: coin, data: data.price_average }))
             // console.log("response GET favorite list", data)
@@ -24,7 +24,7 @@ class CryptoStore {
 
     async getCryptocurrencyData() {
         try {
-            const jwtForFavorites = getLocalStorage('rememberMe')
+            const jwtForFavorites = getAuthSession()
             const {data} = await GET( GET_CRYPTO, jwtForFavorites)
             this.cryptoStore = data?.map(({coin, data}) => ({ id: coin, color: "hsl(257, 70%, 50%)", data: data.price_average }))
             toJS(this.cryptoStore)
